@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=2">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Calculator Device Chassis -->
+    <div class="calculator-chassis">
+      
+      <!-- Top Bezel with Status LED & Brand -->
+      <div class="top-bezel">
+        <div class="brand-group">
+          <span class="brand-label">World's best Calculator</span>
+          <span class="designer-label">disined by Aarav and Rahil</span>
+        </div>
+        <div class="status-indicator" title="Connected to Google Cloud Run">
+          <span class="led-dot"></span>
+          <span class="status-text">ONLINE</span>
+        </div>
+      </div>
+
+      <!-- LCD Display Area -->
+      <div class="screen-container">
+        <div class="screen-glare"></div>
+        <div class="screen-content">
+          <div class="expression-line" id="expressionDisplay"></div>
+          <div class="main-display" id="mainDisplay">0</div>
+        </div>
+      </div>
+
+      <!-- Secondary Utility Bar -->
+      <div class="utility-bar">
+        <button class="util-btn" id="btnHistory" title="Calculation History (H)">HISTORY</button>
+        <button class="util-btn" id="btnBackspace" title="Backspace (⌫)">DEL</button>
+        <button class="util-btn" id="btnClear" title="Clear (ESC)">AC</button>
+      </div>
+
+      <!-- Main Keypad Grid (Matches hand-drawn sketch layout) -->
+      <!-- Layout:
+           [ 7 ] [ 8 ] [ 9 ] [ √ ]
+           [ 6 ] [ 5 ] [ 4 ] [ × ]
+           [ 3 ] [ 2 ] [ 1 ] [ − ]
+           [ 0 ] [ . ] [ ÷ ] [ + ]
+           [   0 (span)    ] [ = ]
+      -->
+      <div class="keypad-grid">
+        <!-- Row 1 -->
+        <button class="key num-key" data-key="7">7</button>
+        <button class="key num-key" data-key="8">8</button>
+        <button class="key num-key" data-key="9">9</button>
+        <button class="key op-key" data-key="sqrt" title="Square Root">√</button>
+
+        <!-- Row 2 -->
+        <button class="key num-key" data-key="6">6</button>
+        <button class="key num-key" data-key="5">5</button>
+        <button class="key num-key" data-key="4">4</button>
+        <button class="key op-key" data-key="*">×</button>
+
+        <!-- Row 3 -->
+        <button class="key num-key" data-key="3">3</button>
+        <button class="key num-key" data-key="2">2</button>
+        <button class="key num-key" data-key="1">1</button>
+        <button class="key op-key" data-key="-">−</button>
+
+        <!-- Row 4 & 5 (with tall/extended 0 and = matching the sketch) -->
+        <button class="key num-key tall-zero" data-key="0">0</button>
+        <button class="key num-key" data-key=".">.</button>
+        <button class="key op-key" data-key="/" title="Divide">÷</button>
+        <button class="key op-key" data-key="+">+</button>
+
+        <!-- Equals spanning operator slot -->
+        <button class="key action-key wide-space" id="btnParens" title="Parentheses" data-key="()">( )</button>
+        <button class="key action-key" data-key="**" title="Power">^</button>
+        <button class="key equals-key" data-key="=">=</button>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="chassis-footer">
+        <span>Cloud Run Serverless Edition</span>
+      </div>
+    </div>
+
+    <!-- Slide-over History Drawer -->
+    <div class="history-drawer" id="historyDrawer">
+      <div class="history-header">
+        <h3>Calculation History</h3>
+        <button class="close-history-btn" id="btnCloseHistory">&times;</button>
+      </div>
+      <div class="history-list" id="historyList">
+        <div class="empty-history">No calculations yet</div>
+      </div>
+      <div class="history-footer">
+        <button class="clear-history-btn" id="btnClearHistory">Clear History</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=2"></script>
+</body>
+</html>
