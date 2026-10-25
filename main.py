@@ -48,7 +48,7 @@ class CalculationHistoryItem(BaseModel):
     result: str
     timestamp: str
 
-# In-memory history (last 50 items)
+# In-memory history (last 100 items)
 history_db: List[CalculationHistoryItem] = []
 history_counter = 0
 
@@ -132,7 +132,7 @@ def calculate(req: CalculationRequest):
             timestamp=timestamp_str
         )
         history_db.insert(0, history_item)
-        if len(history_db) > 50:
+        if len(history_db) > 100:
             history_db.pop()
             
         return CalculationResponse(

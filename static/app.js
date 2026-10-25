@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function saveLocalHistory(history) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 50)));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 100)));
     } catch (e) {
       console.warn('Could not write to localStorage', e);
     }
