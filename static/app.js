@@ -77,12 +77,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  const ADMIN_EMAIL = 'rahilgupta017@gmail.com';
+
   function showApp(user) {
     loginOverlay.style.display = 'none';
     appContainer.style.display = 'flex';
     userBadge.style.display = 'flex';
     userAvatar.src = user.picture || '';
     userNameEl.textContent = user.name || user.email;
+
+    // Show Admin button ONLY for rahilgupta017@gmail.com
+    if (btnOpenAdmin) {
+      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        btnOpenAdmin.style.display = 'inline-flex';
+      } else {
+        btnOpenAdmin.style.display = 'none';
+      }
+    }
   }
 
   function signOut() {
@@ -94,6 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
     loginOverlay.style.display = 'flex';
     appContainer.style.display = 'none';
     userBadge.style.display = 'none';
+    if (btnOpenAdmin) {
+      btnOpenAdmin.style.display = 'none';
+    }
+    if (adminModalOverlay) {
+      adminModalOverlay.style.display = 'none';
+    }
   }
 
   btnSignOut.addEventListener('click', signOut);
@@ -107,6 +124,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnOpenAdmin) {
     btnOpenAdmin.addEventListener('click', () => {
+      if (!currentUser || !currentUser.email || currentUser.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        alert('Access denied: Admin view is restricted to the administrator.');
+        return;
+      }
       adminModalOverlay.style.display = 'flex';
       loadAdminSummary();
     });
@@ -134,8 +155,12 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadAdminSummary() {
     adminModalBody.innerHTML = '<div class="admin-loading">Loading users & calculations from Firestore...</div>';
     try {
-      const res = await fetch('/api/admin/summary');
-      if (!res.ok) throw new Error('Failed to load admin summary');
+      const emailParam = encodeURIComponent(currentUser ? currentUser.email : '');
+      const res = await fetch(`/api/admin/summary?email=${emailParam}`);
+      if (!res.ok) {
+        if (res.status === 403) throw new Error('Forbidden: Admin access required.');
+        throw new Error('Failed to load admin summary');
+      }
       const data = await res.json();
 
       const users = data.users || [];

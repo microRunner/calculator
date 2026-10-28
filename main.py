@@ -25,6 +25,11 @@ GOOGLE_CLIENT_ID = os.environ.get(
 )
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "chess-analyzer-497918")
 FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "calculatordb")
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("ADMIN_EMAILS", "rahilgupta017@gmail.com").split(",")
+    if e.strip()
+}
 
 # Initialize Firestore Client
 firestore_client = None
@@ -390,18 +395,22 @@ def fetch_all_users():
     return list(users_db.values())
 
 @app.get("/api/users")
-def get_users():
-    """Admin endpoint to see all users who have signed in (JSON)."""
+def get_users(email: Optional[str] = None):
+    """Admin endpoint to see all users who have signed in (Admin only)."""
+    if not email or email.strip().lower() not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Forbidden: Admin access restricted to rahilgupta017@gmail.com")
     return fetch_all_users()
 
-@app.get("/api/users/{email}/calculations")
-def get_user_calculations(email: str):
-    """Admin endpoint to get all calculations for a specific user."""
+@app.get("/api/users/{target_email}/calculations")
+def get_user_calculations(target_email: str, email: Optional[str] = None):
+    """Admin endpoint to get all calculations for a specific user (Admin or self)."""
+    if not email or (email.strip().lower() not in ADMIN_EMAILS and email.strip().lower() != target_email.strip().lower()):
+        raise HTTPException(status_code=403, detail="Forbidden: Admin access required.")
     if firestore_client:
         try:
             docs = (
                 firestore_client.collection("users")
-                .document(email)
+                .document(target_email)
                 .collection("history")
                 .order_by("created_at", direction=firestore.Query.DESCENDING)
                 .limit(100)
@@ -470,18 +479,21 @@ def calculate_admin_metrics(users_list):
     }
 
 @app.get("/api/admin/summary")
-def get_admin_summary():
-    """Consolidated endpoint returning all users, calculations, and lifetime/7d metrics."""
+def get_admin_summary(email: Optional[str] = None):
+    """Consolidated endpoint returning all users, calculations, and lifetime/7d metrics (Admin only)."""
+    if not email or email.strip().lower() not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Forbidden: Admin access restricted to rahilgupta017@gmail.com")
+
     all_users = fetch_all_users()
     summary = []
     for u in all_users:
-        email = u.get("email", "")
+        u_email = u.get("email", "")
         calcs = []
-        if firestore_client and email:
+        if firestore_client and u_email:
             try:
                 c_docs = (
                     firestore_client.collection("users")
-                    .document(email)
+                    .document(u_email)
                     .collection("history")
                     .order_by("created_at", direction=firestore.Query.DESCENDING)
                     .limit(50)
@@ -512,9 +524,36 @@ def get_admin_summary():
     }
 
 @app.get("/admin", response_class=HTMLResponse)
-def admin_dashboard():
-    """Simple admin dashboard to view signed-in users, calculations, and metrics."""
-    data = get_admin_summary()
+def admin_dashboard(email: Optional[str] = None):
+    """Simple admin dashboard to view signed-in users, calculations, and metrics (Admin only)."""
+    if not email or email.strip().lower() not in ADMIN_EMAILS:
+        return HTMLResponse(
+            status_code=403,
+            content="""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>403 - Access Denied</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 2.5rem; text-align: center; max-width: 440px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+    h1 { color: #ef4444; font-size: 1.6rem; margin-top: 0; }
+    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }
+    a { display: inline-block; margin-top: 1.25rem; background: #38bdf8; color: #0f172a; text-decoration: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="font-size:3rem;margin-bottom:0.5rem;">🔒</div>
+    <h1>Access Restricted</h1>
+    <p>The administrative dashboard and metrics are restricted exclusively to authorized administrators.</p>
+    <a href="/">← Return to Calculator</a>
+  </div>
+</body>
+</html>"""
+        )
+
+    data = get_admin_summary(email=email)
     users = data["users"]
     m = data["metrics"]
     lt = m["lifetime"]
