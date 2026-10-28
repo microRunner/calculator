@@ -1,5 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // ========== GOOGLE SIGN-IN ==========
+  // ========== GOOGLE SIGN-IN & ADMIN SETUP ==========
+  const ADMIN_EMAIL = 'rahilgupta017@gmail.com';
+
   const loginOverlay = document.getElementById('loginOverlay');
   const appContainer = document.getElementById('appContainer');
   const userBadge = document.getElementById('userBadge');
@@ -7,7 +9,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const userNameEl = document.getElementById('userName');
   const btnSignOut = document.getElementById('btnSignOut');
 
+  // In-app Admin Modal elements (declared at top so showApp can safely reference them)
+  const btnOpenAdmin = document.getElementById('btnOpenAdmin');
+  const btnCloseAdmin = document.getElementById('btnCloseAdmin');
+  const btnAdminRefresh = document.getElementById('btnAdminRefresh');
+  const adminModalOverlay = document.getElementById('adminModalOverlay');
+  const adminModalBody = document.getElementById('adminModalBody');
+
   let currentUser = null;
+
+  function isUserAdmin(user) {
+    if (!user) return false;
+    const email = (user.email || '').trim().toLowerCase();
+    const name = (user.name || '').trim().toLowerCase();
+    return email === ADMIN_EMAIL.toLowerCase() || name.includes('rahil gupta') || email.startsWith('rahilgupta017');
+  }
 
   // Check for existing session
   const savedUser = localStorage.getItem('calculator_user');
@@ -20,8 +36,18 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(currentUser)
-      }).catch(err => console.warn('User sync skipped:', err));
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.user) {
+          currentUser = Object.assign(currentUser, d.user);
+          localStorage.setItem('calculator_user', JSON.stringify(currentUser));
+          showApp(currentUser);
+        }
+      })
+      .catch(err => console.warn('User sync skipped:', err));
     } catch (e) {
+      console.warn('Error reading saved session:', e);
       localStorage.removeItem('calculator_user');
     }
   }
@@ -77,8 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  const ADMIN_EMAIL = 'rahilgupta017@gmail.com';
-
   function showApp(user) {
     loginOverlay.style.display = 'none';
     appContainer.style.display = 'flex';
@@ -88,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Show Admin button ONLY for rahilgupta017@gmail.com
     if (btnOpenAdmin) {
-      if (user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      if (isUserAdmin(user)) {
         btnOpenAdmin.style.display = 'inline-flex';
       } else {
         btnOpenAdmin.style.display = 'none';
@@ -116,15 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSignOut.addEventListener('click', signOut);
 
   // ========== IN-APP ADMIN MODAL LOGIC ==========
-  const btnOpenAdmin = document.getElementById('btnOpenAdmin');
-  const btnCloseAdmin = document.getElementById('btnCloseAdmin');
-  const btnAdminRefresh = document.getElementById('btnAdminRefresh');
-  const adminModalOverlay = document.getElementById('adminModalOverlay');
-  const adminModalBody = document.getElementById('adminModalBody');
-
   if (btnOpenAdmin) {
     btnOpenAdmin.addEventListener('click', () => {
-      if (!currentUser || !currentUser.email || currentUser.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      if (!isUserAdmin(currentUser)) {
         alert('Access denied: Admin view is restricted to the administrator.');
         return;
       }

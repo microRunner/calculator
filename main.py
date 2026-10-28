@@ -364,7 +364,14 @@ def sync_user(req: UserSyncRequest):
             user_ref.set(payload, merge=True)
         except Exception as e:
             print(f"Firestore sync_user error: {e}")
-    return {"status": "synced"}
+    return {
+        "status": "synced",
+        "user": {
+            "name": users_db[req.email].get("name", req.name or req.email.split("@")[0]),
+            "email": req.email,
+            "picture": users_db[req.email].get("picture", req.picture or "")
+        }
+    }
 
 def fetch_all_users():
     """Fetch users from Firestore with fallback to in-memory users_db."""
