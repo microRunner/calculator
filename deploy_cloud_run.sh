@@ -34,11 +34,15 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com --project="$
 echo "Deploying service '$SERVICE_NAME' to region '$REGION'..."
 
 # Deploy to Cloud Run using Cloud Build directly from source
+CLIENT_ID="${GOOGLE_CLIENT_ID:-570480688616-1kfggobt8nu318kktd8ao689u6pmln6s.apps.googleusercontent.com}"
+FS_DB="${FIRESTORE_DATABASE:-calculatordb}"
+
 gcloud run deploy "$SERVICE_NAME" \
     --source . \
     --region "$REGION" \
     --platform managed \
     --allow-unauthenticated \
+    --set-env-vars GOOGLE_CLIENT_ID="$CLIENT_ID",GCP_PROJECT="$CURRENT_PROJECT",FIRESTORE_DATABASE="$FS_DB" \
     --memory 512Mi \
     --cpu 1 \
     --min-instances 0 \

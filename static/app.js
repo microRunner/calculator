@@ -1,4 +1,269 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // ========== GOOGLE SIGN-IN ==========
+  const loginOverlay = document.getElementById('loginOverlay');
+  const appContainer = document.getElementById('appContainer');
+  const userBadge = document.getElementById('userBadge');
+  const userAvatar = document.getElementById('userAvatar');
+  const userNameEl = document.getElementById('userName');
+  const btnSignOut = document.getElementById('btnSignOut');
+
+  let currentUser = null;
+
+  // Check for existing session
+  const savedUser = localStorage.getItem('calculator_user');
+  if (savedUser) {
+    try {
+      currentUser = JSON.parse(savedUser);
+      showApp(currentUser);
+      // Sync user profile to backend & Firestore
+      fetch('/api/auth/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentUser)
+      }).catch(err => console.warn('User sync skipped:', err));
+    } catch (e) {
+      localStorage.removeItem('calculator_user');
+    }
+  }
+
+  // Initialize Google Sign-In
+  function initGoogleSignIn() {
+    if (typeof google === 'undefined' || !google.accounts) {
+      // Google library not loaded yet, retry
+      setTimeout(initGoogleSignIn, 200);
+      return;
+    }
+    google.accounts.id.initialize({
+      client_id: window.GOOGLE_CLIENT_ID || '570480688616-1kfggobt8nu318kktd8ao689u6pmln6s.apps.googleusercontent.com',
+      callback: handleGoogleSignIn,
+      auto_select: false,
+    });
+    google.accounts.id.renderButton(
+      document.getElementById('googleSignInButton'),
+      {
+        theme: 'filled_blue',
+        size: 'large',
+        shape: 'pill',
+        text: 'signin_with',
+        width: 280,
+      }
+    );
+    // Show one-tap prompt if not already signed in
+    if (!currentUser) {
+      google.accounts.id.prompt();
+    }
+  }
+
+  async function handleGoogleSignIn(response) {
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Authentication failed');
+      }
+
+      const data = await res.json();
+      currentUser = data.user;
+      localStorage.setItem('calculator_user', JSON.stringify(currentUser));
+      showApp(currentUser);
+    } catch (err) {
+      console.error('Sign-in error:', err);
+      alert('Sign-in failed. Please try again.');
+    }
+  }
+
+  function showApp(user) {
+    loginOverlay.style.display = 'none';
+    appContainer.style.display = 'flex';
+    userBadge.style.display = 'flex';
+    userAvatar.src = user.picture || '';
+    userNameEl.textContent = user.name || user.email;
+  }
+
+  function signOut() {
+    currentUser = null;
+    localStorage.removeItem('calculator_user');
+    if (typeof google !== 'undefined' && google.accounts) {
+      google.accounts.id.disableAutoSelect();
+    }
+    loginOverlay.style.display = 'flex';
+    appContainer.style.display = 'none';
+    userBadge.style.display = 'none';
+  }
+
+  btnSignOut.addEventListener('click', signOut);
+
+  // ========== IN-APP ADMIN MODAL LOGIC ==========
+  const btnOpenAdmin = document.getElementById('btnOpenAdmin');
+  const btnCloseAdmin = document.getElementById('btnCloseAdmin');
+  const btnAdminRefresh = document.getElementById('btnAdminRefresh');
+  const adminModalOverlay = document.getElementById('adminModalOverlay');
+  const adminModalBody = document.getElementById('adminModalBody');
+
+  if (btnOpenAdmin) {
+    btnOpenAdmin.addEventListener('click', () => {
+      adminModalOverlay.style.display = 'flex';
+      loadAdminSummary();
+    });
+  }
+
+  if (btnCloseAdmin) {
+    btnCloseAdmin.addEventListener('click', () => {
+      adminModalOverlay.style.display = 'none';
+    });
+  }
+
+  if (btnAdminRefresh) {
+    btnAdminRefresh.addEventListener('click', loadAdminSummary);
+  }
+
+  // Click outside card to close
+  if (adminModalOverlay) {
+    adminModalOverlay.addEventListener('click', (e) => {
+      if (e.target === adminModalOverlay) {
+        adminModalOverlay.style.display = 'none';
+      }
+    });
+  }
+
+  async function loadAdminSummary() {
+    adminModalBody.innerHTML = '<div class="admin-loading">Loading users & calculations from Firestore...</div>';
+    try {
+      const res = await fetch('/api/admin/summary');
+      if (!res.ok) throw new Error('Failed to load admin summary');
+      const data = await res.json();
+
+      const users = data.users || [];
+      const m = data.metrics || { lifetime: {}, last_7_days: {} };
+      const lt = m.lifetime || { total_users: 0, total_sessions: 0, total_calculations: 0 };
+      const w7 = m.last_7_days || { active_users: 0, sessions: 0, calculations: 0 };
+
+      let metricsHtml = `
+        <div class="modal-metrics-wrap">
+          <div class="modal-metrics-title">🌐 Lifetime Summary</div>
+          <div class="modal-metrics-grid">
+            <div class="modal-metric-card">
+              <span class="modal-metric-label">Lifetime Users</span>
+              <span class="modal-metric-num">${lt.total_users || 0}</span>
+            </div>
+            <div class="modal-metric-card">
+              <span class="modal-metric-label">Total Sessions</span>
+              <span class="modal-metric-num">${lt.total_sessions || 0}</span>
+            </div>
+            <div class="modal-metric-card">
+              <span class="modal-metric-label">Total Calculations</span>
+              <span class="modal-metric-num">${lt.total_calculations || 0}</span>
+            </div>
+          </div>
+
+          <div class="modal-metrics-title" style="color:#38bdf8;margin-top:0.9rem;">⚡ Last 7 Days Activity</div>
+          <div class="modal-metrics-grid">
+            <div class="modal-metric-card recent">
+              <span class="modal-metric-label">Active Users (7d)</span>
+              <span class="modal-metric-num">${w7.active_users || 0}</span>
+            </div>
+            <div class="modal-metric-card recent">
+              <span class="modal-metric-label">Sessions (7d)</span>
+              <span class="modal-metric-num">${w7.sessions || 0}</span>
+            </div>
+            <div class="modal-metric-card recent">
+              <span class="modal-metric-label">Calculations (7d)</span>
+              <span class="modal-metric-num">${w7.calculations || 0}</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-metrics-title" style="margin-top:1.25rem;">📋 Registered Users & Logs</div>
+      `;
+
+      if (!users || users.length === 0) {
+        adminModalBody.innerHTML = metricsHtml + '<div class="admin-loading">No users have signed in yet.</div>';
+        return;
+      }
+
+      let cardsHtml = '';
+      users.forEach(u => {
+        const avatar = u.picture
+          ? `<img class="admin-user-avatar" src="${escapeHtml(u.picture)}" alt="avatar">`
+          : '<div class="admin-user-avatar" style="display:flex;align-items:center;justify-content:center;background:#334155;color:#94a3b8;">👤</div>';
+
+        const calcs = u.calculations || [];
+        const calcCount = calcs.length || u.calculation_count || 0;
+
+        let calcsListHtml = '';
+        if (calcs.length > 0) {
+          const items = calcs.map(c => `
+            <li class="admin-calc-item">
+              <div>
+                <span class="admin-calc-expr">${escapeHtml(c.expression)}</span>
+                <span class="admin-calc-res">= ${escapeHtml(c.result)}</span>
+              </div>
+              <span class="admin-calc-time">${escapeHtml(c.timestamp || '')}</span>
+            </li>
+          `).join('');
+
+          calcsListHtml = `
+            <div class="admin-calcs-section">
+              <details class="admin-calcs-toggle" open>
+                <summary>▸ Calculations History (${calcCount})</summary>
+                <ul class="admin-calcs-list">
+                  ${items}
+                </ul>
+              </details>
+            </div>
+          `;
+        } else {
+          calcsListHtml = `
+            <div class="admin-calcs-section" style="color:#64748b;font-size:0.8rem;font-style:italic;">
+              No calculations recorded yet.
+            </div>
+          `;
+        }
+
+        cardsHtml += `
+          <div class="admin-user-card">
+            <div class="admin-user-header">
+              <div class="admin-user-meta">
+                ${avatar}
+                <div class="admin-user-title">
+                  <span class="admin-user-name">${escapeHtml(u.name || 'Anonymous')}</span>
+                  <span class="admin-user-email">${escapeHtml(u.email || '')}</span>
+                </div>
+              </div>
+              <div class="admin-stats-row">
+                <span class="admin-stat-pill">Logins: <strong>${u.login_count || 1}</strong></span>
+                <span class="admin-stat-pill">Calculations: <strong>${calcCount}</strong></span>
+              </div>
+            </div>
+            ${calcsListHtml}
+          </div>
+        `;
+      });
+
+      adminModalBody.innerHTML = metricsHtml + cardsHtml;
+    } catch (err) {
+      console.error('Failed to load admin summary:', err);
+      adminModalBody.innerHTML = `<div class="admin-loading" style="color:#ef4444;">Failed to load activity: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  // Fetch the client ID from the server, then init
+  fetch('/api/auth/client-id')
+    .then(r => r.json())
+    .then(data => {
+      window.GOOGLE_CLIENT_ID = data.client_id;
+      initGoogleSignIn();
+    })
+    .catch(() => {
+      // Fallback: try initializing anyway
+      initGoogleSignIn();
+    });
+
+  // ========== CALCULATOR LOGIC (unchanged) ==========
   const mainDisplay = document.getElementById('mainDisplay');
   const expressionDisplay = document.getElementById('expressionDisplay');
   const historyDrawer = document.getElementById('historyDrawer');
@@ -145,7 +410,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch('/api/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expression: expr })
+        body: JSON.stringify({
+          expression: expr,
+          email: currentUser ? currentUser.email : null
+        })
       });
 
       if (!response.ok) {
@@ -175,9 +443,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // History Drawer Handling
-  function loadHistory() {
+  async function loadHistory() {
     try {
-      const data = getLocalHistory();
+      let data = getLocalHistory();
+      if (currentUser && currentUser.email) {
+        try {
+          const res = await fetch(`/api/history?email=${encodeURIComponent(currentUser.email)}`);
+          if (res.ok) {
+            const serverHistory = await res.json();
+            if (serverHistory && serverHistory.length > 0) {
+              data = serverHistory;
+              saveLocalHistory(data);
+            }
+          }
+        } catch (e) {
+          console.warn('Could not fetch server history, falling back to local', e);
+        }
+      }
+
       if (!data || data.length === 0) {
         historyList.innerHTML = '<div class="empty-history">No calculations yet</div>';
         return;
@@ -322,6 +605,10 @@ document.addEventListener('DOMContentLoaded', () => {
       backspace();
     } else if (e.key === 'Escape') {
       e.preventDefault();
+      if (adminModalOverlay && adminModalOverlay.style.display === 'flex') {
+        adminModalOverlay.style.display = 'none';
+        return;
+      }
       triggerVisualFeedback(btnClear);
       clearAll();
     } else if (e.key === 'r' || e.key === 's' || e.key === 'q') {

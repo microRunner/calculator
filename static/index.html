@@ -7,10 +7,30 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=2">
+  <link rel="stylesheet" href="/static/style.css?v=3">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-  <div class="app-container">
+  <!-- Google Sign-In Overlay (blocks calculator until signed in) -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-card">
+      <div class="login-logo">🔢</div>
+      <h1 class="login-title">Cloud Calculator</h1>
+      <p class="login-subtitle">Sign in with Google to continue</p>
+      <div id="googleSignInButton"></div>
+      <p class="login-footer">disined by Aarav and Rahil</p>
+    </div>
+  </div>
+
+  <!-- Signed-in user badge (shown after login, top-right) -->
+  <div class="user-badge" id="userBadge" style="display: none;">
+    <img class="user-avatar" id="userAvatar" src="" alt="avatar">
+    <span class="user-name" id="userName"></span>
+    <button class="badge-admin-btn" id="btnOpenAdmin" title="View Users & Calculations Activity">📊 Admin</button>
+    <button class="sign-out-btn" id="btnSignOut" title="Sign Out">✕</button>
+  </div>
+
+  <div class="app-container" id="appContainer" style="display: none;">
     <!-- Calculator Device Chassis -->
     <div class="calculator-chassis">
       
@@ -43,13 +63,6 @@
       </div>
 
       <!-- Main Keypad Grid (Matches hand-drawn sketch layout) -->
-      <!-- Layout:
-           [ 7 ] [ 8 ] [ 9 ] [ √ ]
-           [ 6 ] [ 5 ] [ 4 ] [ × ]
-           [ 3 ] [ 2 ] [ 1 ] [ − ]
-           [ 0 ] [ . ] [ ÷ ] [ + ]
-           [   0 (span)    ] [ = ]
-      -->
       <div class="keypad-grid">
         <!-- Row 1 -->
         <button class="key num-key" data-key="7">7</button>
@@ -69,7 +82,7 @@
         <button class="key num-key" data-key="1">1</button>
         <button class="key op-key" data-key="-">−</button>
 
-        <!-- Row 4 & 5 (with tall/extended 0 and = matching the sketch) -->
+        <!-- Row 4 & 5 -->
         <button class="key num-key tall-zero" data-key="0">0</button>
         <button class="key num-key" data-key=".">.</button>
         <button class="key op-key" data-key="/" title="Divide">÷</button>
@@ -102,6 +115,25 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=2"></script>
+  <!-- In-app Admin & Calculations Modal -->
+  <div class="admin-modal-overlay" id="adminModalOverlay" style="display: none;">
+    <div class="admin-modal-card">
+      <div class="admin-modal-header">
+        <div>
+          <h2>👥 Users & Calculations Activity</h2>
+          <span class="admin-modal-subtitle">Real-time Firestore user records & calculation history</span>
+        </div>
+        <div class="admin-header-actions">
+          <button class="admin-refresh-btn" id="btnAdminRefresh" title="Refresh">↻ Refresh</button>
+          <button class="admin-close-btn" id="btnCloseAdmin" title="Close">&times;</button>
+        </div>
+      </div>
+      <div class="admin-modal-body" id="adminModalBody">
+        <div class="admin-loading">Loading users & calculations...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=4"></script>
 </body>
 </html>
