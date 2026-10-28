@@ -12,6 +12,12 @@ ENV/
 # Environment and sensitive files
 .env
 .env.*
+*.json.key
+*credential*.json
+*service_account*.json
+*service-account*.json
+*.pem
+*.key
 
 # OS generated files
 .DS_Store

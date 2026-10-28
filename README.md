@@ -1,6 +1,6 @@
-# Cloud Calculator (Google Cloud Run)
+# Cloud Calculator (Google Cloud Run + Firestore)
 
-A responsive, production-ready web calculator matching the hand-drawn sketch layout, built with **Python (FastAPI)** and ready for deployment to **Google Cloud Run**.
+A responsive, production-ready web calculator matching the hand-drawn sketch layout, built with **Python (FastAPI)**, **Google Identity Services (OAuth 2.0)**, and **Google Cloud Firestore**, deployed to **Google Cloud Run**.
 
 ---
 
@@ -8,22 +8,19 @@ A responsive, production-ready web calculator matching the hand-drawn sketch lay
 
 ```mermaid
 flowchart LR
-    Client["Browser / User\n(Mobile & Desktop)"] -->|"HTTPS (*.run.app)"| CloudRun["Google Cloud Run\n(Serverless Container)"]
-    CloudRun -->|"Static Files (HTML/CSS/JS)"| Frontend["LCD UI & Tactile Keypad"]
-    CloudRun -->|"REST API /api/calculate"| Engine["Python Math Engine (Safe AST)"]
-    Engine --> History["Calculation History Store"]
+    Client["Browser UI\n(LCD & 3D Keypad)"] -->|"Google OAuth"| Auth["Google Identity Services"]
+    Client -->|"Instant Calc (<25ms)"| CloudRun["Google Cloud Run\n(Python FastAPI)"]
+    CloudRun -->|"Async BackgroundTasks"| Firestore[("Cloud Firestore\n(calculatordb)")]
+    Client -->|"In-App Admin & Metrics"| CloudRun
 ```
 
 - **Runtime:** Python 3.11 with FastAPI + Uvicorn.
-- **Frontend:** Vanilla HTML5, modern CSS3 (3D tactile keypad, LCD display, responsive), and ES6 JavaScript.
-- **Keypad Layout:** Directly maps the user's sketch:
-  - Top row: `7`, `8`, `9`, `√`
-  - Middle row: `6`, `5`, `4`, `×`
-  - Lower row: `3`, `2`, `1`, `−`
-  - Bottom row: `0` (tall zero), `.`, `%`, `+`
-  - Right action strip: `√`, `×`, `−`, `+`, `=`
-- **Security:** Expressions are parsed into an Abstract Syntax Tree (AST) using Python's `ast` module; no arbitrary code execution or `eval()` vulnerability.
-- **Cost:** Scales to zero when not receiving requests (free tier eligible: 2 million requests/month free).
+- **Authentication:** Google OAuth 2.0 (Google Identity Services) with server-side token verification and user profile tracking.
+- **Database:** Google Cloud Firestore (Native Mode, `calculatordb`) storing persistent user profiles and private calculation histories.
+- **Performance:** Sub-25ms calculation turnaround time via FastAPI `BackgroundTasks` (asynchronous database persistence).
+- **Admin & Metrics:** In-app modal (`📊 Admin`) and standalone dashboard (`/admin`) displaying lifetime totals (users, sessions, calculations) and last-7-day active metrics.
+- **Security:** Mathematical expressions parsed via Python's Abstract Syntax Tree (`ast` module) — strictly whitelisted operators, no `eval()`.
+- **Cost:** Scales to zero when idle (`--min-instances 0`), running within GCP free tiers.
 
 ---
 
@@ -31,16 +28,18 @@ flowchart LR
 
 ```
 /home/rahil/calculator/
-├── main.py                 # FastAPI backend server with math engine & history
-├── requirements.txt        # Frozen Python dependencies
+├── main.py                 # FastAPI backend, AST engine, Firestore sync, Admin API
+├── requirements.txt        # Python dependencies (FastAPI, Google Auth, Firestore)
 ├── Dockerfile              # Production container build for Google Cloud Run
-├── .dockerignore           # Excluded files for clean builds
-├── deploy_cloud_run.sh     # One-step GCP deployment script
-├── README.md               # Documentation & guide
+├── .dockerignore           # Excluded build files
+├── .gitignore              # Git ignore rules (protects credentials & keys)
+├── deploy_cloud_run.sh     # Automated Cloud Run deployment script
+├── DESIGN.md               # Detailed architectural design & decisions document
+├── README.md               # Quickstart and overview
 └── static/
-    ├── index.html          # Web UI markup matching hand-drawn sketch
-    ├── style.css           # 3D tactile buttons, LCD backlight, responsive layout
-    └── app.js              # Keyboard shortcuts, client state, and API sync
+    ├── index.html          # HTML5 layout, Google Sign-in gate, Admin modal
+    ├── style.css           # 3D tactile buttons, LCD backlight, metric cards
+    └── app.js              # Keypad bindings, Google auth sync, in-app admin logic
 ```
 
 ---
@@ -53,54 +52,32 @@ flowchart LR
    source venv/bin/activate
    ```
 
-2. **Run the development server:**
+2. **Authenticate with Google Cloud (for local Firestore access):**
    ```bash
-   uvicorn main:app --reload --port 8080
+   gcloud auth application-default login
    ```
 
-3. **Open in browser:**
-   Navigate to [http://localhost:8080](http://localhost:8080).
+3. **Run the development server:**
+   ```bash
+   uvicorn main:app --reload --port 8000
+   ```
+
+4. **Open in browser:**
+   Navigate to [http://localhost:8000](http://localhost:8000).
 
 ---
 
 ## Deploying to Google Cloud Run
 
-### Prerequisites
-1. Install the Google Cloud SDK (`gcloud`) if not already installed:
-   ```bash
-   sudo apt-get install -y google-cloud-cli
-   ```
-2. Log in and configure your project:
-   ```bash
-   gcloud auth login
-   gcloud config set project YOUR_PROJECT_ID
-   ```
-3. Enable Cloud Run and Cloud Build APIs (one-time):
-   ```bash
-   gcloud services enable run.googleapis.com cloudbuild.googleapis.com
-   ```
+To deploy updates to Google Cloud Run:
 
-### Option A: Run the deployment script
 ```bash
 cd /home/rahil/calculator
 ./deploy_cloud_run.sh
 ```
 
-### Option B: Deploy with a single `gcloud` command
-```bash
-cd /home/rahil/calculator
-gcloud run deploy cloud-calculator \
-    --source . \
-    --region us-central1 \
-    --platform managed \
-    --allow-unauthenticated \
-    --memory 512Mi \
-    --cpu 1 \
-    --min-instances 0 \
-    --max-instances 5
-```
-
-Once deployment completes, Cloud Run will print your shareable public URL:
-```
-Service URL: https://cloud-calculator-xxxxxx-uc.a.run.app
-```
+The script automatically:
+1. Validates your active GCP project (`chess-analyzer-497918`).
+2. Enables necessary GCP APIs (`run.googleapis.com`, `cloudbuild.googleapis.com`).
+3. Builds the Docker container via Cloud Build.
+4. Deploys to Cloud Run with `GOOGLE_CLIENT_ID`, `GCP_PROJECT`, and `FIRESTORE_DATABASE` configured.
