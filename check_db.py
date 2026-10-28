@@ -3,7 +3,17 @@
 Quick utility script to inspect and dump all data in Firestore calculatordb
 (Equivalent to: SELECT * FROM calculatordb;)
 """
+import sys
 import os
+
+# Auto-switch to virtual environment python if running under system python
+VENV_PYTHON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "bin", "python")
+if os.path.exists(VENV_PYTHON) and sys.executable != VENV_PYTHON:
+    os.execv(VENV_PYTHON, [VENV_PYTHON] + sys.argv)
+
+import warnings
+warnings.filterwarnings("ignore")
+
 from datetime import datetime, timezone
 from google.cloud import firestore
 
