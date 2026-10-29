@@ -123,6 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function signOut() {
     currentUser = null;
     localStorage.removeItem('calculator_user');
+    saveLocalHistory([]);
+    if (historyList) {
+      historyList.innerHTML = '<div class="empty-history">No calculations yet</div>';
+    }
     if (typeof google !== 'undefined' && google.accounts) {
       google.accounts.id.disableAutoSelect();
     }
@@ -231,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
       let cardsHtml = '';
       users.forEach(u => {
         const avatar = u.picture
-          ? `<img class="admin-user-avatar" src="${escapeHtml(u.picture)}" alt="avatar">`
+          ? `<img class="admin-user-avatar" src="${escapeHtml(u.picture)}" alt="avatar" referrerpolicy="no-referrer">`
           : '<div class="admin-user-avatar" style="display:flex;align-items:center;justify-content:center;background:#334155;color:#94a3b8;">👤</div>';
 
         const calcs = u.calculations || [];
@@ -471,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Persist to client-side localStorage
       addHistoryItem({
-        id: Date.now(),
+        id: data.id || String(Date.now()),
         expression: expr,
         result: data.display_result,
         timestamp: data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -494,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const res = await fetch(`/api/history?email=${encodeURIComponent(currentUser.email)}`);
           if (res.ok) {
             const serverHistory = await res.json();
-            if (serverHistory && serverHistory.length > 0) {
+            if (Array.isArray(serverHistory)) {
               data = serverHistory;
               saveLocalHistory(data);
             }
@@ -548,10 +552,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function deleteHistoryItem(id, itemEl) {
+  async function deleteHistoryItem(id, itemEl) {
     try {
       let list = getLocalHistory();
-      list = list.filter(item => item.id !== id);
+      list = list.filter(item => String(item.id) !== String(id));
       saveLocalHistory(list);
 
       itemEl.classList.add('removing');
@@ -561,15 +565,25 @@ document.addEventListener('DOMContentLoaded', () => {
           historyList.innerHTML = '<div class="empty-history">No calculations yet</div>';
         }
       }, 180);
+
+      const emailParam = currentUser && currentUser.email ? `?email=${encodeURIComponent(currentUser.email)}` : '';
+      await fetch(`/api/history/${encodeURIComponent(id)}${emailParam}`, {
+        method: 'DELETE'
+      });
     } catch (err) {
       console.error('Failed to delete history item', err);
     }
   }
 
-  function clearHistory() {
+  async function clearHistory() {
     try {
       saveLocalHistory([]);
       historyList.innerHTML = '<div class="empty-history">History cleared</div>';
+
+      const emailParam = currentUser && currentUser.email ? `?email=${encodeURIComponent(currentUser.email)}` : '';
+      await fetch(`/api/history${emailParam}`, {
+        method: 'DELETE'
+      });
     } catch (err) {
       console.error('Failed to clear history', err);
     }

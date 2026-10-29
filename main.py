@@ -3,7 +3,8 @@ import operator
 import math
 import os
 import json
-from typing import List, Optional
+import uuid
+from typing import List, Optional, Union
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
@@ -67,13 +68,14 @@ class UserSyncRequest(BaseModel):
     picture: Optional[str] = None
 
 class CalculationResponse(BaseModel):
+    id: Optional[str] = None
     expression: str
     result: float | int
     display_result: str
     timestamp: str
 
 class CalculationHistoryItem(BaseModel):
-    id: int
+    id: Union[int, str]
     expression: str
     result: str
     timestamp: str
@@ -131,7 +133,7 @@ def health_check():
     """GCP Cloud Run health check endpoint"""
     return {"status": "healthy", "service": "calculator", "timestamp": datetime.utcnow().isoformat()}
 
-def persist_calculation_async(email: str, raw_expr: str, display: str, timestamp_str: str, now_iso: str):
+def persist_calculation_async(email: str, calc_id: str, raw_expr: str, display: str, timestamp_str: str, now_iso: str):
     """Write calculation and user stats to Firestore asynchronously in the background."""
     if not firestore_client:
         return
@@ -142,7 +144,8 @@ def persist_calculation_async(email: str, raw_expr: str, display: str, timestamp
             "calculation_count": firestore.Increment(1),
             "last_active": now_iso
         }, merge=True)
-        user_ref.collection("history").add({
+        user_ref.collection("history").document(calc_id).set({
+            "id": calc_id,
             "expression": raw_expr,
             "result": display,
             "timestamp": timestamp_str,
@@ -175,11 +178,12 @@ def calculate(req: CalculationRequest, background_tasks: BackgroundTasks):
             display = str(res)
             
         timestamp_str = datetime.now().strftime("%H:%M:%S")
+        calc_id = uuid.uuid4().hex
         
         # Save to history
         history_counter += 1
         history_item = CalculationHistoryItem(
-            id=history_counter,
+            id=calc_id,
             expression=raw_expr,
             result=display,
             timestamp=timestamp_str
@@ -199,6 +203,7 @@ def calculate(req: CalculationRequest, background_tasks: BackgroundTasks):
             background_tasks.add_task(
                 persist_calculation_async,
                 req.email,
+                calc_id,
                 raw_expr,
                 display,
                 timestamp_str,
@@ -206,6 +211,7 @@ def calculate(req: CalculationRequest, background_tasks: BackgroundTasks):
             )
             
         return CalculationResponse(
+            id=calc_id,
             expression=raw_expr,
             result=final_res,
             display_result=display,
@@ -229,33 +235,87 @@ def get_history(email: Optional[str] = None):
                 .stream()
             )
             items = []
-            for idx, doc in enumerate(docs):
+            for doc in docs:
                 d = doc.to_dict()
                 items.append({
-                    "id": d.get("id", idx + 1),
+                    "id": str(doc.id),
                     "expression": d.get("expression", ""),
                     "result": str(d.get("result", "")),
                     "timestamp": d.get("timestamp", "")
                 })
-            if items:
-                return items
+            return items
         except Exception as e:
             print(f"Firestore get_history error: {e}")
     return history_db
 
 @app.delete("/api/history/{item_id}")
-def delete_history_item(item_id: int):
+def delete_history_item(item_id: str, email: Optional[str] = None):
     global history_db
-    initial_len = len(history_db)
-    history_db = [item for item in history_db if item.id != item_id]
-    if len(history_db) == initial_len:
-        raise HTTPException(status_code=404, detail="History item not found")
+    if firestore_client and email:
+        try:
+            user_ref = firestore_client.collection("users").document(email)
+            doc_ref = user_ref.collection("history").document(item_id)
+            doc_snap = doc_ref.get()
+            deleted = False
+            if doc_snap.exists:
+                doc_ref.delete()
+                deleted = True
+            else:
+                matches = list(user_ref.collection("history").where("id", "==", item_id).limit(1).stream())
+                if matches:
+                    matches[0].reference.delete()
+                    deleted = True
+                elif item_id.isdigit():
+                    int_matches = list(user_ref.collection("history").where("id", "==", int(item_id)).limit(1).stream())
+                    if int_matches:
+                        int_matches[0].reference.delete()
+                        deleted = True
+
+            if deleted:
+                user_snap = user_ref.get()
+                if user_snap.exists:
+                    curr_count = (user_snap.to_dict() or {}).get("calculation_count", 0)
+                    user_ref.set({"calculation_count": max(0, curr_count - 1)}, merge=True)
+        except Exception as e:
+            print(f"Firestore delete_history_item error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    if email and email in users_db:
+        users_db[email]["calculation_count"] = max(0, users_db[email].get("calculation_count", 0) - 1)
+
+    history_db = [item for item in history_db if str(item.id) != str(item_id)]
     return {"status": "deleted", "id": item_id}
 
 @app.delete("/api/history")
-def clear_history():
+def clear_history(email: Optional[str] = None):
     global history_db
-    history_db.clear()
+    if firestore_client and email:
+        try:
+            user_ref = firestore_client.collection("users").document(email)
+            history_col = user_ref.collection("history")
+            docs = list(history_col.stream())
+            if docs:
+                batch = firestore_client.batch()
+                batch_count = 0
+                for doc in docs:
+                    batch.delete(doc.reference)
+                    batch_count += 1
+                    if batch_count % 400 == 0:
+                        batch.commit()
+                        batch = firestore_client.batch()
+                if batch_count % 400 != 0:
+                    batch.commit()
+
+            user_ref.set({"calculation_count": 0}, merge=True)
+        except Exception as e:
+            print(f"Firestore clear_history error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    if email and email in users_db:
+        users_db[email]["calculation_count"] = 0
+    elif not email:
+        history_db.clear()
+
     return {"status": "cleared"}
 
 @app.post("/api/auth/google")
@@ -354,9 +414,17 @@ def sync_user(req: UserSyncRequest):
     if firestore_client:
         try:
             user_ref = firestore_client.collection("users").document(req.email)
+            doc = user_ref.get()
+            if doc.exists:
+                existing = doc.to_dict() or {}
+                if not users_db[req.email].get("picture") and existing.get("picture"):
+                    users_db[req.email]["picture"] = existing["picture"]
+                if (not users_db[req.email].get("name") or users_db[req.email]["name"] == req.email.split("@")[0]) and existing.get("name"):
+                    users_db[req.email]["name"] = existing["name"]
+
             payload = {
                 "email": req.email,
-                "name": req.name or req.email.split("@")[0],
+                "name": users_db[req.email].get("name", req.name or req.email.split("@")[0]),
                 "last_seen": now,
             }
             if req.picture:
@@ -520,7 +588,10 @@ def get_admin_summary(email: Optional[str] = None):
                 print(f"Error fetching user calcs for summary: {e}")
         user_info = dict(u)
         user_info["calculations"] = calcs
-        user_info["calculation_count"] = len(calcs) if calcs else u.get("calculation_count", 0)
+        if firestore_client and u_email:
+            user_info["calculation_count"] = u.get("calculation_count", len(calcs)) if calcs else 0
+        else:
+            user_info["calculation_count"] = len(calcs) if calcs else u.get("calculation_count", 0)
         summary.append(user_info)
 
     summary.sort(key=lambda x: x.get("last_active", x.get("last_seen", "")), reverse=True)
@@ -569,7 +640,7 @@ def admin_dashboard(email: Optional[str] = None):
     rows_html = ""
     for u in users:
         email = u.get("email", "")
-        avatar = f'<img src="{u.get("picture", "")}" style="width:32px;height:32px;border-radius:50%;vertical-align:middle;margin-right:8px;" />' if u.get("picture") else "👤 "
+        avatar = f'<img src="{u.get("picture", "")}" referrerpolicy="no-referrer" style="width:32px;height:32px;border-radius:50%;vertical-align:middle;margin-right:8px;" />' if u.get("picture") else "👤 "
         calcs = u.get("calculations", [])
         calc_count = u.get("calculation_count", len(calcs))
 
@@ -833,5 +904,5 @@ def serve_index():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
