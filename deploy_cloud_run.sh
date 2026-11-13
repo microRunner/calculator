@@ -36,13 +36,17 @@ echo "Deploying service '$SERVICE_NAME' to region '$REGION'..."
 # Deploy to Cloud Run using Cloud Build directly from source
 CLIENT_ID="${GOOGLE_CLIENT_ID:-570480688616-1kfggobt8nu318kktd8ao689u6pmln6s.apps.googleusercontent.com}"
 FS_DB="${FIRESTORE_DATABASE:-calculatordb}"
+# Android TWA (Digital Asset Links). Fingerprints are comma-separated SHA-256
+# signing cert fingerprints (upload key and/or Google Play App Signing key).
+ANDROID_PKG="${ANDROID_PACKAGE_NAME:-io.github.microrunner.calculator}"
+ANDROID_FP="${ANDROID_SHA256_FINGERPRINTS:-B6:36:91:E3:FF:B5:62:3A:0F:37:42:FB:EE:05:40:13:A0:E1:B4:7C:53:45:41:A5:8D:35:B2:B5:D0:F4:87:A7}"
 
 gcloud run deploy "$SERVICE_NAME" \
     --source . \
     --region "$REGION" \
     --platform managed \
     --allow-unauthenticated \
-    --set-env-vars GOOGLE_CLIENT_ID="$CLIENT_ID",GCP_PROJECT="$CURRENT_PROJECT",FIRESTORE_DATABASE="$FS_DB" \
+    --set-env-vars "^@^GOOGLE_CLIENT_ID=$CLIENT_ID@GCP_PROJECT=$CURRENT_PROJECT@FIRESTORE_DATABASE=$FS_DB@ANDROID_PACKAGE_NAME=$ANDROID_PKG@ANDROID_SHA256_FINGERPRINTS=$ANDROID_FP" \
     --memory 512Mi \
     --cpu 1 \
     --min-instances 0 \

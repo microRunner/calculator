@@ -8,3 +8,5 @@ __pycache__/
 .env
 README.md
 deploy_cloud_run.sh
+android/
+assets/

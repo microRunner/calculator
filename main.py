@@ -895,6 +895,54 @@ static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# --- PWA / Android Trusted Web Activity (TWA) support ---------------------------
+# The service worker must be served from the root so its scope covers "/".
+@app.get("/sw.js", include_in_schema=False)
+def serve_service_worker():
+    return FileResponse(
+        os.path.join(static_dir, "sw.js"),
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+    )
+
+@app.get("/manifest.json", include_in_schema=False)
+def serve_manifest():
+    return FileResponse(
+        os.path.join(static_dir, "manifest.json"),
+        media_type="application/manifest+json",
+    )
+
+# Digital Asset Links: proves to Android that the app and this website share an
+# owner, so the TWA opens full-screen without the Chrome URL bar.
+# Configure via env vars (comma-separated fingerprints allowed, e.g. upload key
+# + Google Play App Signing key):
+#   ANDROID_PACKAGE_NAME=io.github.microrunner.calculator
+#   ANDROID_SHA256_FINGERPRINTS=AA:BB:...,CC:DD:...
+ANDROID_PACKAGE_NAME = os.environ.get("ANDROID_PACKAGE_NAME", "io.github.microrunner.calculator")
+ANDROID_SHA256_FINGERPRINTS = [
+    f.strip().upper()
+    for f in os.environ.get("ANDROID_SHA256_FINGERPRINTS", "").split(",")
+    if f.strip()
+]
+
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+def serve_privacy_policy():
+    # Public privacy policy (required for the Google Play Store listing).
+    return FileResponse(os.path.join(static_dir, "privacy.html"))
+
+@app.get("/.well-known/assetlinks.json", include_in_schema=False)
+def asset_links():
+    if not ANDROID_SHA256_FINGERPRINTS:
+        return []
+    return [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": ANDROID_PACKAGE_NAME,
+            "sha256_cert_fingerprints": ANDROID_SHA256_FINGERPRINTS,
+        },
+    }]
+
 @app.api_route("/", methods=["GET", "HEAD"])
 def serve_index():
     index_path = os.path.join(static_dir, "index.html")

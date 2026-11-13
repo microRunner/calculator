@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cloud Calculator</title>
+  <!-- PWA / Android (TWA) metadata -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,7 +24,7 @@
       <h1 class="login-title">Cloud Calculator</h1>
       <p class="login-subtitle">Sign in with Google to continue</p>
       <div id="googleSignInButton"></div>
-      <p class="login-footer">disined by Aarav and Rahil</p>
+      <p class="login-footer">disined by Aarav and Rahil · <a href="/privacy" style="color: inherit;">Privacy</a></p>
     </div>
   </div>
 
@@ -135,5 +141,15 @@
   </div>
 
   <script src="/static/app.js?v=6"></script>
+  <script>
+    // Register the service worker so the app is installable (PWA) and can be
+    // packaged as an Android Trusted Web Activity.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) =>
+          console.warn('Service worker registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>
