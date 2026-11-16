@@ -39,7 +39,7 @@ FS_DB="${FIRESTORE_DATABASE:-calculatordb}"
 # Android TWA (Digital Asset Links). Fingerprints are comma-separated SHA-256
 # signing cert fingerprints (upload key and/or Google Play App Signing key).
 ANDROID_PKG="${ANDROID_PACKAGE_NAME:-io.github.microrunner.calculator}"
-ANDROID_FP="${ANDROID_SHA256_FINGERPRINTS:-B6:36:91:E3:FF:B5:62:3A:0F:37:42:FB:EE:05:40:13:A0:E1:B4:7C:53:45:41:A5:8D:35:B2:B5:D0:F4:87:A7}"
+ANDROID_FP="${ANDROID_SHA256_FINGERPRINTS:-A3:13:4C:A6:62:83:AD:F9:BF:F4:8A:10:A6:8D:87:E2:B8:13:92:6F:CB:8B:07:8A:94:40:72:58:AB:F8:9B:0A,B6:36:91:E3:FF:B5:62:3A:0F:37:42:FB:EE:05:40:13:A0:E1:B4:7C:53:45:41:A5:8D:35:B2:B5:D0:F4:87:A7}"
 
 gcloud run deploy "$SERVICE_NAME" \
     --source . \
